@@ -78,23 +78,40 @@ export default function LocalhostLauncher() {
 
   const handlePortChange = (e: ChangeEvent<HTMLInputElement>) => {
     const newPort = e.target.value;
-    if (/^\d*$/.test(newPort) && parseInt(newPort, 10) <= 65535) {
+    // Allow empty input or valid numbers up to 65535
+    if (newPort === "" || (/^\d*$/.test(newPort) && parseInt(newPort, 10) <= 65535)) {
       setPort(newPort);
+    } else if (/^\d*$/.test(newPort) && parseInt(newPort, 10) > 65535) {
+      setPort("65535"); // Max port if exceeded
     }
   };
 
   const handleStartServer = async () => {
     if (!directoryHandle) {
-      toast({ title: "Error", description: "Please select a directory first.", variant: "destructive" });
-      return;
-    }
-    if (!port || parseInt(port, 10) <= 0 || parseInt(port, 10) > 65535) {
-      toast({ title: "Error", description: "Please enter a valid port number (1-65535).", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Please select a directory first.",
+        variant: "destructive",
+      });
       return;
     }
 
+    let effectivePort = port;
+    const parsedPort = parseInt(port, 10);
+
+    if (isNaN(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
+      toast({
+        title: "Invalid Port",
+        description: "Port was invalid or empty. Defaulting to 8080.",
+        variant: "default",
+      });
+      effectivePort = "8080";
+      setPort("8080"); // Update the input field as well
+    }
+
+
     setIsRunning(true);
-    const currentServerUrl = `http://localhost:${port}`;
+    const currentServerUrl = `http://localhost:${effectivePort}`;
     setServerUrl(currentServerUrl);
     let currentStatusMessage = `Server running at ${currentServerUrl}`;
 
@@ -123,7 +140,7 @@ export default function LocalhostLauncher() {
     }
     
     setStatusMessage(currentStatusMessage);
-    toast({ title: "Server Started (Simulated)", description: `Serving from ${selectedPath} on port ${port}.`});
+    toast({ title: "Server Started (Simulated)", description: `Serving from ${selectedPath} on port ${effectivePort}.`});
   };
 
   const handleStopServer = () => {
@@ -131,16 +148,11 @@ export default function LocalhostLauncher() {
     setStatusMessage("Server is stopped.");
     setServerUrl("");
     setIframeSrcDoc(null);
-    // Optionally clear directory on stop, or keep it for next start
-    // setDirectoryHandle(null); 
-    // setSelectedPath(null);
     toast({ title: "Server Stopped (Simulated)" });
   };
   
-  // Adjust iframe height
   useEffect(() => {
     if (isRunning && iframeSrcDoc && iframeRef.current) {
-        // Basic auto-height, might need more sophisticated solution for complex content
         const resizeObserver = new ResizeObserver(entries => {
             if (iframeRef.current && iframeRef.current.contentWindow && iframeRef.current.contentWindow.document.body) {
                 iframeRef.current.style.height = iframeRef.current.contentWindow.document.body.scrollHeight + 'px';
@@ -155,8 +167,7 @@ export default function LocalhostLauncher() {
         };
 
         const currentIframe = iframeRef.current;
-        currentIframe.onload = attemptResize; // Ensure content is loaded
-        // Initial attempt
+        currentIframe.onload = attemptResize; 
         attemptResize();
 
 
@@ -213,13 +224,11 @@ export default function LocalhostLauncher() {
             <Label htmlFor="port" className="text-lg">Port</Label>
             <Input 
               id="port" 
-              type="number" 
+              type="text" /* Changed to text to allow empty string, validation handles parse to int */
               value={port} 
               onChange={handlePortChange} 
               placeholder="e.g., 8080" 
               className="w-40"
-              min="1"
-              max="65535"
               disabled={!supportsFSAPI}
             />
           </div>
@@ -278,9 +287,7 @@ export default function LocalhostLauncher() {
                 srcDoc={iframeSrcDoc}
                 title="Local Content Preview"
                 className="w-full min-h-[300px] border border-border rounded-md resize-y overflow-auto"
-                sandbox="allow-scripts" // Be cautious with this if files are untrusted. For local files, it's usually fine.
-                                       // Removed allow-same-origin for better security. This will break relative asset loading.
-                                       // This is a known limitation of simple srcDoc previews.
+                sandbox="allow-scripts" 
               />
               <p className="text-xs text-muted-foreground mt-2">
                 Note: This preview renders the HTML content of 'index.html'. Relative paths to assets (CSS, JS, images) within the HTML may not load correctly in this sandboxed preview. For full functionality, use a command-line HTTP server.
